@@ -1,10 +1,10 @@
 #include "net_flow.h"
 
-// работа с памятью
-
 /* из за разного порядка байт по разному работает memcpy
  * функции перевода int/short -> массив char
+ * size_t n - число переводимых элементов
 */
+
 void memcpy_sh(char *dist, unsigned short *src, size_t n)
 {
     size_t i, j = 0;
@@ -14,7 +14,7 @@ void memcpy_sh(char *dist, unsigned short *src, size_t n)
     }
 }
 
-void memcpy_int(char *dist, unsigned int *src, size_t n)
+void memcpy_int(char *dist, unsigned int *src, size_t n) // Решить проблему!!
 {
     unsigned short a;
     size_t i, j = 0;
@@ -29,7 +29,7 @@ void memcpy_int(char *dist, unsigned int *src, size_t n)
 
 // управление списком потоков
 
-void new_flow(struct flow *a, struct flow *b)
+void set_flow(struct flow *a, struct flow *b)
 {
     a->protocol = b->protocol;
     a->tos = b->tos;
@@ -46,14 +46,14 @@ void flow_list_update(struct flow_list *fl_list, unsigned short f_inactive)
     unsigned short i;
     for (i = 0; i < FL_LIST_SIZE; i++) {
         if ((time(0) - fl_list->data[i].last_swtch) == f_inactive) {
-            fl_list->data[i].protocol = 0; // убиваем поток
+            fl_list->data[i].protocol = 0; // поток недействителен
         }
     }
 }
 
 void flow_update(struct flow *net_fl, const char *buff)
 {
-    struct ethhdr *eth = (struct ethhdr *)buff;
+    struct ethhdr *eth = (struct ethhdr *) buff;
     struct iphdr *ip = (struct iphdr *) buff + FRAME_HSIZE;
 
     net_fl->in_pkts++;
@@ -69,7 +69,7 @@ void flow_update(struct flow *net_fl, const char *buff)
 
     if (ip->protocol == 6) {
         struct tcphdr *tcp = (struct tcphdr *) buff + IP_HSIZE;
-        net_fl->tcp_flags = net_fl->tcp_flags | tcp->th_flags;
+        net_fl->tcp_flags |= tcp->th_flags;
     }
 }
 
@@ -78,17 +78,17 @@ unsigned short find_flow_id(struct flow_list *fl_list, struct flow *net_fl)
     // поиск потока в списке
     unsigned short i;
     for (i = 0; i < FL_LIST_SIZE; i++) {
-        // если все биты (т.е. само определения потоков) совпадают
+        // если все 14 байт (т.е. само определения потоков) совпадают
         if (!memcmp(&net_fl, &fl_list->data[i], 14)) {
             return i;
         }
     }
-    // невозможный индекс
+    // невозможный индекс, означающий, то потока нет
     return 65500;
 }
 
 
-// создание пакета
+// создание элементов пакета
 
 unsigned short create_nf_tpl(unsigned short *nf_tpl, unsigned short template_ID,
                    unsigned short ifname_size, char proto)
@@ -120,32 +120,34 @@ unsigned short create_nf_tpl(unsigned short *nf_tpl, unsigned short template_ID,
     field_count += 16;
     unsigned short lenght = (field_count + 2) * 4;
 
-        nf_tpl[0] = 0; nf_tpl[1] = lenght,
-        nf_tpl[2] = template_ID; nf_tpl[3] = field_count,
+    nf_tpl[0] = 0; nf_tpl[1] = lenght,
+    nf_tpl[2] = template_ID; nf_tpl[3] = field_count,
         // все что 4 байта
-        nf_tpl[4] = 1; nf_tpl[5] = 4;    // IN_BYTES
-        nf_tpl[6] = 2; nf_tpl[7] = 4;    // IN_PKTS
-        nf_tpl[8] = 3; nf_tpl[9] = 4;    // FLOWS
-        nf_tpl[10] = 21; nf_tpl[11] = 4;    // LAST_SWITCHED
-        nf_tpl[12] = 22; nf_tpl[13] = 4;    // FIRST_SWITCHED
-        nf_tpl[14] = 8; nf_tpl[15] = 4;    // IPV4_SRC_ADDR
-        nf_tpl[16] = 12; nf_tpl[17] = 4;    // IPV4_DST_ADDR
+    nf_tpl[4] = 1; nf_tpl[5] = 4;    // IN_BYTES
+    nf_tpl[6] = 2; nf_tpl[7] = 4;    // IN_PKTS
+    nf_tpl[8] = 3; nf_tpl[9] = 4;    // FLOWS
+    nf_tpl[10] = 21; nf_tpl[11] = 4;    // LAST_SWITCHED
+    nf_tpl[12] = 22; nf_tpl[13] = 4;    // FIRST_SWITCHED
+    nf_tpl[14] = 8; nf_tpl[15] = 4;    // IPV4_SRC_ADDR
+    nf_tpl[16] = 12; nf_tpl[17] = 4;    // IPV4_DST_ADDR
         // все что 2 байта и т.д.
-        nf_tpl[18] = 36; nf_tpl[19] = 2;    // FLOW_ACTIVE_TIMEOUT
-        nf_tpl[20] = 37; nf_tpl[21] = 2;    // FLOW_INACTIVE_TIMEOUT
-        nf_tpl[22] = 10; nf_tpl[23] = 2;    // INPUT_SNMP
-        nf_tpl[24] = 54; nf_tpl[25] = 2;    // IPV4_IDENT
+    nf_tpl[18] = 36; nf_tpl[19] = 2;    // FLOW_ACTIVE_TIMEOUT
+    nf_tpl[20] = 37; nf_tpl[21] = 2;    // FLOW_INACTIVE_TIMEOUT
+    nf_tpl[22] = 10; nf_tpl[23] = 2;    // INPUT_SNMP
+    nf_tpl[24] = 54; nf_tpl[25] = 2;    // IPV4_IDENT
 
-        nf_tpl[26] = 5; nf_tpl[27] = 1;    // SRC_TOS
-        nf_tpl[28] = 4; nf_tpl[29] = 1;    // PROTOCOL
+    nf_tpl[26] = 5; nf_tpl[27] = 1;    // SRC_TOS
+    nf_tpl[28] = 4; nf_tpl[29] = 1;    // PROTOCOL
         // MAC
-        nf_tpl[30] = 56; nf_tpl[31] = 6;    // IN_SRC_MAC
-        nf_tpl[32] = 57; nf_tpl[33] = 6;    // IN_DST_MAC
+    nf_tpl[30] = 56; nf_tpl[31] = 6;    // IN_SRC_MAC
+    nf_tpl[32] = 57; nf_tpl[33] = 6;    // IN_DST_MAC
 
-        nf_tpl[34] = 82; nf_tpl[35] = ifname_size;  // IF_NAME
+    nf_tpl[34] = 82; nf_tpl[35] = ifname_size;  // IF_NAME
 
     // дописание в зависимости от протокола
-    memcpy(nf_tpl + 4 + field_count * 2, data, data_size);
+    for (unsigned short i = 0; i < data_size + 1; ++i) {
+        nf_tpl[36 + i] = data[i];
+    }
 
     return lenght;
 }
@@ -153,14 +155,21 @@ unsigned short create_nf_tpl(unsigned short *nf_tpl, unsigned short template_ID,
 unsigned short create_nf_data(char *nf_data, unsigned short template_ID,
                     struct flow *net_fl, struct exporter *sensor)
 {
-    char data[5], data_len = 4;
+    char data[5], data_len;
 
-    memcpy(data, &net_fl->port_s_type, 2);
-    memcpy(data + 2, &net_fl->port_s_type, 2);
-
-    if (net_fl->protocol == 6) {    // TCP
-        data[4] = net_fl->tcp_flags;
-        data_len++;
+    if (net_fl->protocol != 1) {
+        memcpy(data, &net_fl->port_s_type, 2);
+        memcpy(data + 2, &net_fl->port_d_code, 2);
+        data_len = 4;
+        if (net_fl->protocol == 6) {    // TCP
+            data[4] = net_fl->tcp_flags;
+            data_len++;
+        }
+    }
+    else {
+        memcpy(data, &net_fl->port_s_type, 1);
+        memcpy(data + 1, &net_fl->port_d_code, 1);
+        data_len = 2;
     }
 
     unsigned int d_32[7] = {
@@ -209,119 +218,62 @@ unsigned short create_nf_data(char *nf_data, unsigned short template_ID,
 void create_nf_header(unsigned int *nf_header, unsigned short count,
                       struct exporter *sensor, unsigned int source_id)
 {
-    // заголовок пакета
     nf_header[0] = (9 << 16) + count;   // версия + количество flow_sets
     nf_header[1] = sensor->sys_up_time;
     nf_header[2] = time(0);             // время отправки пакета
     nf_header[3] = sensor->sq_number;   // число пакетов
-    nf_header[4] = source_id;           // номер потока?
+    nf_header[4] = source_id;
+}
+
+// создание пакетов NetFlow
+
+unsigned short new_nf_tpl(char *nf_packet, struct exporter *sensor)
+{
+    unsigned short nf_tpl[42], bytes = 20, tpl_bytes = 0;
+
+    // заголовок
+    unsigned int nf_header[20];
+    create_nf_header(nf_header, 3, sensor, sensor->source_id);
+    memcpy_int(nf_packet, nf_header, 5);
+
+    // ICMP
+    tpl_bytes = create_nf_tpl(nf_tpl, 256, sizeof (sensor->if_name), 1);
+    memcpy_sh(nf_packet + bytes, nf_tpl, tpl_bytes);
+    bytes += tpl_bytes;
+
+    // UDP
+    tpl_bytes = 0;
+    tpl_bytes = create_nf_tpl(nf_tpl, 257, sizeof (sensor->if_name), 17);
+    memcpy_sh(nf_packet + bytes, nf_tpl, tpl_bytes);
+    bytes += tpl_bytes;
+
+    // TCP
+    tpl_bytes = 0;
+    tpl_bytes = create_nf_tpl(nf_tpl, 258, sizeof (sensor->if_name), 6);
+    memcpy_sh(nf_packet + bytes, nf_tpl, tpl_bytes);
+
+    return bytes + tpl_bytes;
 }
 
 
-// создание NetFlow пакета
-unsigned int new_nf_pocket(char *nf_packet, struct flow_list *fl_list,
+unsigned int new_nf_data(char *nf_packet, struct flow *fl,
                          struct exporter *sensor)
 {
-    unsigned short bytes = 20, tpl_bytes = 0, flow_sets = 0;
-    unsigned short i;
-
-    unsigned short nf_tpl[42];      // 36 + 6 для наибольшого протокола
-    // шаблоны
-    for (i = fl_list->last_send; i < fl_list->free_id; i++) {
-        tpl_bytes = create_nf_tpl(nf_tpl, 256 + i, sizeof (sensor->if_name),
-                               fl_list->data[i].protocol);
-
-        // bytes используется как смещение на размеры шаблонов + заголовок
-        memcpy_sh(nf_packet + bytes, nf_tpl, tpl_bytes);
-        bytes += tpl_bytes;
-        flow_sets++;
-    }
-
-    // данные
-    for (i = 0; i < fl_list->free_id; i++) {
-        if (fl_list->data[i].protocol > 0) { // поток жив
-            bytes += create_nf_data(nf_packet + bytes, 256 + i,
-                                    &fl_list->data[i], sensor);
-            flow_sets++;
-        }
-    }
-
+    unsigned short bytes = 20, flow_sets = 0;
     unsigned int nf_header[20];
-    create_nf_header(nf_header, flow_sets, sensor,
-                     sensor->source_id);
+    create_nf_header(nf_header, flow_sets, sensor, sensor->source_id);
     memcpy_int(nf_packet, nf_header, 5);
+
+    // запись по шаблонам
+    if (fl->protocol == 1) {
+        bytes += create_nf_data(nf_packet + 20, 256, fl, sensor);
+    }
+    else if (fl->protocol == 17) {
+        bytes += create_nf_data(nf_packet + 20, 257, fl, sensor);
+    }
+    else if (fl->protocol == 6){
+        bytes += create_nf_data(nf_packet + 20, 258, fl, sensor);
+    }
 
     return bytes;
 }
-
-
-/*
- * NetFlow Version 9 Export Packet Example
- * Заголовок
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |     Version = 9               |          Count = 7            |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                           sysUpTime                           |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                           UNIX Secs                           |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                       Sequence Number                         |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                           Source ID                           |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *
- * Шаблон
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |       FlowSet ID = 0          |      Length = 28 bytes        |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |       Template ID 256         |       Field Count = 5         |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |     IP_SRC_ADDR = 8           |       Field Length = 4        |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |     IP_DST_ADDR = 12          |       Field Length = 4        |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |     IP_NEXT_HOP = 15          |       Field Length = 4        |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |       IN_PKTS = 2             |       Field Length = 4        |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |       IN_BYTES = 1            |       Field Length = 4        |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *
- * Данные
-    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |       FlowSet ID = 256        |          Length = 64          |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                          198.168.1.12                         |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                          10.5.12.254                          |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                          192.168.1.1                          |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                             5009                              |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                            5344385                            |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                          192.168.1.27                         |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                           10.5.12.23                          |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                          192.168.1.1                          |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                              748                              |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                             388934                            |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                          192.168.1.56                         |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                           10.5.12.65                          |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                           192.168.1.1                         |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                               5                               |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |                              6534                             |
-   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-*/

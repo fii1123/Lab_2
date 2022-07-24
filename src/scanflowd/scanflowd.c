@@ -25,9 +25,7 @@ void *listening_thread(void *argum)
     struct argum *a = argum;
     struct flow net_fl;
     unsigned short flow_id;
-    unsigned int buff_len = sizeof(a->buff);
-
-    puts("Listening...\nPress \'q\' for exit");
+    size_t buff_len = sizeof(a->buff);
 
     while (1) {
         net_fl.in_bytes = recv(a->listening_sock, a->buff, buff_len, 0);
@@ -61,16 +59,14 @@ void *listening_thread(void *argum)
             if (flow_id == 65500){
                 // потока нет
                 flow_id = a->fl_list.free_id;
-                new_flow(&a->fl_list.data[flow_id], &net_fl);
+                set_flow(&a->fl_list.data[flow_id], &net_fl);
                 // защита от переполнения
                 if (a->fl_list.free_id < FL_LIST_SIZE - 1) {
                     a->fl_list.free_id++;
                 }
             }
-
             // обновление потока
             flow_update(&a->fl_list.data[flow_id], a->buff);
-
             break;
         default:
             break;
@@ -82,40 +78,38 @@ void *secondary_tread(void *argum)
 {
     struct argum *a = argum;
     struct sockaddr_in sa = a->collector_sa;
-    char nf_packet[1500];   // пакет целиком, вообще максимум 1500 байт
-    int bytes;
-    int time_of_send = time(0);
+    char nf_packet[1500];   // максимум для пакета 1500 байт
+    unsigned int bytes;
+    unsigned int time_of_send = time(0);
+    unsigned short i;
 
+    // отправка шаблонов
+    a->sensor.sq_number++;
+    bytes = new_nf_tpl(nf_packet, &a->sensor);
+    bytes = sendto(a->collect_sock, nf_packet, bytes, 0,
+           (struct sockaddr *) &sa, sizeof(sa));
+    memset(nf_packet, 0, bytes);
+
+    // отправка данных
     while (1) {
         // удаление неактивных потоков
         flow_list_update(&a->fl_list, a->sensor.f_inactive);
 
         // пришло время отправки
-        if ((unsigned short)
-                difftime(time(0), time_of_send) == a->sensor.f_active) {
+        if ((unsigned short) difftime(time(0), time_of_send) ==
+                a->sensor.f_active) {
             a->sensor.sq_number++;
-            // необходимо проанализировать собранный пакет!
-            bytes = new_nf_pocket(nf_packet, &a->fl_list, &a->sensor);
 
-#define DEBUG
-#ifdef DEBUG
-            printf("{");
-            for (int i = 0; i < bytes; ++i) {
-                if (i % 4 == 0) {
-                    printf("\n");
+            for (i = 0; i < FL_LIST_SIZE; i++) {
+                if (a->fl_list.data[i].protocol > 0) {
+                    bytes = new_nf_data(nf_packet, &a->fl_list.data[i], &a->sensor);
+
+                    sendto(a->collect_sock, nf_packet, bytes, 0,
+                           (struct sockaddr *) &sa, sizeof(sa));
+                    memset(nf_packet, 0, bytes);
+                    time_of_send = time(0);
                 }
-                printf("%x ", nf_packet[i]);
             }
-            puts("}");
-#endif
-            bytes = sendto(a->collect_sock, nf_packet, bytes, 0,
-                   (struct sockaddr *) &sa, sizeof(sa));
-
-            // для отправки новых потоков
-            a->fl_list.last_send = a->fl_list.free_id - 1;
-            // обнуление
-            memset(nf_packet, 0, bytes);
-            time_of_send = time(0);
         }
     }
 }
@@ -148,7 +142,7 @@ int main (int argc, char **argv)
     inet_pton(AF_INET, if_req.ifr_ifru.ifru_addr.sa_data, &ip);
     struct sockaddr_in sa_cl = {
         .sin_family = AF_INET,
-        .sin_port = 9994,           // порт сенсора потумолчанию
+        .sin_port = 9994,           // порт сенсора по умолчанию
         .sin_addr.s_addr = ip       // ip адрес сетевого интерфейса
     };
     bind_socket(collect_socket, (struct sockaddr *) &sa_cl, sizeof(sa_cl));
@@ -175,7 +169,7 @@ int main (int argc, char **argv)
             .if_name = argv[1],
             .input_snmp = if_req.ifr_ifindex,   // если честно, я не до конца понял разницу
             .source_id = if_req.ifr_ifindex,    // между ними
-            .f_active = 5,     // 60
+            .f_active = 60,
             .f_inactive = 15,
             .flows = 0,
             .sq_number = 0,
@@ -184,7 +178,6 @@ int main (int argc, char **argv)
         .fl_list = {
             .data = {0},
             .free_id = 0,
-            .last_send = 0
         }
     };
 
@@ -193,7 +186,6 @@ int main (int argc, char **argv)
     pthread_create(&secd_thread_id, &thr_attr, secondary_tread, &a);
 
     while (!getchar()) {
-// позже нужно будет придумать, как сделать через ctrl + c
     }
 
     pthread_cancel(list_thread_id);

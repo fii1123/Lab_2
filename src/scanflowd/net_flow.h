@@ -19,7 +19,6 @@ struct exporter {
     // timeout
     unsigned short f_active;    // отправка данных каждые X sec
     unsigned short f_inactive;  // интервал неактивности, после которого поток считается завершенным.
-
     unsigned short input_snmp;  // индекс сетевого интерфейса
     char *if_name;              // имя сетевого интерфейса
 
@@ -55,14 +54,16 @@ struct flow {
 };
 
 struct flow_list {
-#define FL_LIST_SIZE 40
+#define FL_LIST_SIZE 64
     struct flow data[FL_LIST_SIZE];
-    unsigned short free_id;           // свободный id
-    unsigned short last_send;   // число отправленных потоков
+    unsigned short free_id;     // свободный id
 };
 
-// присваивание потоку a определение потоку b
-void new_flow(struct flow *a, struct flow *b);
+
+// управление списком потоков
+
+// присваивание потоку a определение потока b
+void set_flow(struct flow *a, struct flow *b);
 
 // обновление списка потоков
 void flow_list_update(struct flow_list *fl_list, unsigned short f_inactive);
@@ -73,7 +74,12 @@ void flow_update(struct flow *net_fl, const char *buff);
 // поиск потока
 unsigned short find_flow_id(struct flow_list *fl_list, struct flow *net_fl);
 
-unsigned int new_nf_pocket(char *nf_packet, struct flow_list *fl_list,
+
+// создание пакетов
+
+unsigned short new_nf_tpl(char *nf_packet, struct exporter *sensor);
+
+unsigned int new_nf_data(char *nf_packet, struct flow *fl,
                          struct exporter *sensor);
 
 #endif // NET_FLOW_H
