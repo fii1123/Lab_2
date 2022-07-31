@@ -26,7 +26,6 @@ void memcpy_int(char *dist, unsigned int *src, size_t n) // Решить про�
     }
 }
 
-
 // управление списком потоков
 
 void set_flow(struct flow *a, struct flow *b)

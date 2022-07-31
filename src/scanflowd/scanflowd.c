@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
 #include <string.h>
 #include <netinet/in.h>
 #include <unistd.h>
@@ -98,11 +99,13 @@ void *secondary_tread(void *argum)
         // пришло время отправки
         if ((unsigned short) difftime(time(0), time_of_send) ==
                 a->sensor.f_active) {
-            a->sensor.sq_number++;
 
             for (i = 0; i < FL_LIST_SIZE; i++) {
                 if (a->fl_list.data[i].protocol > 0) {
-                    bytes = new_nf_data(nf_packet, &a->fl_list.data[i], &a->sensor);
+                    a->sensor.sq_number++;
+
+                    bytes = new_nf_data(nf_packet, &a->fl_list.data[i],
+                                        &a->sensor);
 
                     sendto(a->collect_sock, nf_packet, bytes, 0,
                            (struct sockaddr *) &sa, sizeof(sa));
@@ -114,9 +117,13 @@ void *secondary_tread(void *argum)
     }
 }
 
+static int working = 1;
+void safe_exit(int sig){
+    working = 0;
+}
+
 int main (int argc, char **argv)
 {
-
     if (argc < 2) {
         puts("scanerflowd [interface name (enp*s* ...)] [collector ip]:[port]");
         exit(EXIT_FAILURE);
@@ -152,7 +159,7 @@ int main (int argc, char **argv)
     *port_str = 0;
     port_str++;
     inet_pton(AF_INET, argv[2], &ip);
-    sa_cl.sin_port = htons(atoi(port_str)); // порт коллектор
+    sa_cl.sin_port = htons(atoi(port_str)); // порт коллектора
 
     // подготовка потоков
     pthread_t list_thread_id, secd_thread_id;
@@ -167,8 +174,8 @@ int main (int argc, char **argv)
         .collector_sa = sa_cl,
         .sensor = {
             .if_name = argv[1],
-            .input_snmp = if_req.ifr_ifindex,   // если честно, я не до конца понял разницу
-            .source_id = if_req.ifr_ifindex,    // между ними
+            .input_snmp = if_req.ifr_ifindex,
+            .source_id = if_req.ifr_ifindex,
             .f_active = 60,
             .f_inactive = 15,
             .flows = 0,
@@ -185,15 +192,16 @@ int main (int argc, char **argv)
     pthread_create(&list_thread_id, &thr_attr, listening_thread, &a);
     pthread_create(&secd_thread_id, &thr_attr, secondary_tread, &a);
 
-    while (!getchar()) {
-    }
+    // ctrl+c
+    signal(SIGINT, safe_exit);
+
+    while (working) {}
 
     pthread_cancel(list_thread_id);
     pthread_cancel(secd_thread_id);
 
     close(collect_socket);
     close(listening_socket);
-
 
     exit(EXIT_SUCCESS);
 }

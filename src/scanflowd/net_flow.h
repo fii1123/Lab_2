@@ -18,7 +18,7 @@ struct exporter {
 
     // timeout
     unsigned short f_active;    // отправка данных каждые X sec
-    unsigned short f_inactive;  // интервал неактивности, после которого поток считается завершенным.
+    unsigned short f_inactive;  // интервал неактивности
     unsigned short input_snmp;  // индекс сетевого интерфейса
     char *if_name;              // имя сетевого интерфейса
 
@@ -39,13 +39,13 @@ struct flow {
     unsigned short port_d_code; // порт получателя или код
 
     // переменные потока
-    unsigned int in_bytes;      // число входящих байт
-    unsigned int in_pkts;       // число входящих пакетов
+    unsigned int in_bytes;
+    unsigned int in_pkts;
 
-    unsigned int last_swtch;    // время захвата последнего пакета
-    unsigned int first_swtch;   // время захвата первого пакета
+    unsigned int last_swtch;
+    unsigned int first_swtch;
 
-    char tcp_flags;             // суммируется
+    char tcp_flags;
 
     // данные с последнего пакета
     unsigned int ipv4_ident;

@@ -1,0 +1,7 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: lab-work-2
+
+Files: *
+
+Copyright: 2022 Filatov Ivan <f2000_99@mail.ru>
+License: GPL-3

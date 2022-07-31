@@ -1,0 +1,11 @@
+Source: lab-work-2
+Section: unknown
+Priority: optional
+Maintainer: Filatov Ivan <f2000_99@mail.ru>
+Build-Depends: debhelper:all (>= 9.0.0)
+Standards-Version: 4.5.1
+
+Package: lab-work-2
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Sensor NetFlow v.9
