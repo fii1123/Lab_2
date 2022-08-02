@@ -78,7 +78,15 @@ unsigned short find_flow_id(struct flow_list *fl_list, struct flow *net_fl)
     unsigned short i;
     for (i = 0; i < FL_LIST_SIZE; i++) {
         // если все 14 байт (т.е. само определения потоков) совпадают
-        if (!memcmp(&net_fl, &fl_list->data[i], 14)) {
+        if (
+                //!memcmp(&net_fl, &fl_list->data[i], 14)
+                net_fl->protocol == fl_list->data[i].protocol &&
+                net_fl->tos == fl_list->data[i].tos &&
+                net_fl->ip_s == fl_list->data[i].ip_s &&
+                net_fl->ip_d == fl_list->data[i].ip_d &&
+                net_fl->port_s_type == fl_list->data[i].port_s_type &&
+                net_fl->port_d_code == fl_list->data[i].port_d_code
+                ) {
             return i;
         }
     }

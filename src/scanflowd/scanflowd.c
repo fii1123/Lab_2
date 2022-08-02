@@ -63,6 +63,7 @@ void *listening_thread(void *argum)
                 set_flow(&a->fl_list.data[flow_id], &net_fl);
                 // защита от переполнения
                 if (a->fl_list.free_id < FL_LIST_SIZE - 1) {
+                    a->sensor.flows++;
                     a->fl_list.free_id++;
                 }
             }
@@ -99,11 +100,9 @@ void *secondary_tread(void *argum)
         // пришло время отправки
         if ((unsigned short) difftime(time(0), time_of_send) ==
                 a->sensor.f_active) {
-
             for (i = 0; i < FL_LIST_SIZE; i++) {
                 if (a->fl_list.data[i].protocol > 0) {
                     a->sensor.sq_number++;
-
                     bytes = new_nf_data(nf_packet, &a->fl_list.data[i],
                                         &a->sensor);
 
@@ -176,7 +175,7 @@ int main (int argc, char **argv)
             .if_name = argv[1],
             .input_snmp = if_req.ifr_ifindex,
             .source_id = if_req.ifr_ifindex,
-            .f_active = 60,
+            .f_active = 10, // 30
             .f_inactive = 15,
             .flows = 0,
             .sq_number = 0,
